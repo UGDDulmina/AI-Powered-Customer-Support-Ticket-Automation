@@ -4,11 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.dependencies import get_db
+from app.api.customers import router as customers_router
 
 app = FastAPI(
     title="AI Customer Support API",
     description="AI-powered customer support and ticket automation",
     version="1.0.0",
+)
+
+app.include_router(
+    customers_router,
+    prefix="/api/v1",
 )
 
 
