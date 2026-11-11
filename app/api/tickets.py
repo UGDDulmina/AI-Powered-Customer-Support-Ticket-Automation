@@ -20,7 +20,9 @@ from app.schemas.ticket import (
     TicketCreate,
     TicketUpdate,
     TicketStatus,
-    TicketStatusUpdate
+    TicketStatusUpdate,
+    TicketPriorityUpdate,
+    TicketPriority
 )
 from app.db.dependencies import get_db 
 
@@ -37,6 +39,7 @@ ALLOWED_STATUS = {
     },
     TicketStatus.CLOSED: set()
 }
+
 
 router = APIRouter(
     prefix="/tickets",
@@ -111,11 +114,49 @@ def get_ticket(
 def get_tickets(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
+    search: str | None = Query(
+      default=None
+    ),
+    customer_id: int | None = Query(
+        default=None,
+        min_length=1
+    ),
+    status: TicketStatus | None = Query(
+        default=None
+    ),
+    priority: TicketPriority | None = Query(
+        default=None
+    ),
     database_session: Session = Depends(get_db)
 ):
     offset = (page - 1) * limit
 
     statement = select(Ticket)
+
+    if search is not None:
+        keyword = search.strip()
+
+        if keyword:
+          statement = statement.where(
+             Ticket.subject.ilike(f"%{keyword}%")
+          )
+
+    if customer_id is not None:
+        statement = statement.where(
+            Ticket.customer_id == customer_id
+        )
+            
+    if status is not None:
+        statement = statement.where(
+            Ticket.status == status.value
+        )
+
+    if priority is not None:
+        statement = statement.where(
+            Ticket.priority == priority.value
+        )
+
+    
 
     statement = (
         statement
@@ -183,7 +224,7 @@ def status_update(
 
     allowed = ALLOWED_STATUS.get(ticket.status)
 
-    if allowed is None:
+    if status_data.status not in allowed:
      raise HTTPException(
         status_code=409,
         detail="Current ticket status is invalid"
@@ -198,6 +239,36 @@ def status_update(
         raise
 
     return ticket
+
+@router.patch(
+    "/{ticket_id}/priority",
+    response_model=TicketResponse
+)
+def priority_update(
+    priority_data: TicketPriorityUpdate,
+    database_session: Session = Depends(get_db),
+    ticket_id: int = Path(gt=0)
+):
+  ticket = database_session.get(Ticket, ticket_id)
+
+  if ticket is None:
+      raise HTTPException(
+          status_code=404,
+          detail="Ticket is not found"
+      ) 
+
+  ticket.priority = priority_data.priority.value
+
+  try: 
+        database_session.commit()
+        database_session.refresh(ticket)
+  except Exception:
+        database_session.rollback()
+        raise
+  
+  return ticket
+
+
 
     
     
