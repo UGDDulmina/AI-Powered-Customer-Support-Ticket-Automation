@@ -19,9 +19,24 @@ from app.schemas.ticket import (
     TicketResponse, 
     TicketCreate,
     TicketUpdate,
-    TicketStatus
+    TicketStatus,
+    TicketStatusUpdate
 )
 from app.db.dependencies import get_db 
+
+ALLOWED_STATUS = {
+    TicketStatus.OPEN: {
+        TicketStatus.IN_PROGRESS,
+        TicketStatus.RESOLVED
+    },
+    TicketStatus.IN_PROGRESS: {
+        TicketStatus.RESOLVED
+    },
+    TicketStatus.RESOLVED: {
+        TicketStatus.CLOSED
+    },
+    TicketStatus.CLOSED: set()
+}
 
 router = APIRouter(
     prefix="/tickets",
@@ -148,4 +163,41 @@ def update_ticket(
         )
 
     return ticket 
+
+@router.patch(
+    "/{ticket_id}/status",
+    response_model = TicketResponse
+)
+def status_update(
+    status_data: TicketStatusUpdate,
+    database_session: Session = Depends(get_db),
+    ticket_id: int = Path(gt=0)
+):
+    ticket = database_session.get(Ticket, ticket_id)
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+
+    allowed = ALLOWED_STATUS.get(ticket.status)
+
+    if allowed is None:
+     raise HTTPException(
+        status_code=409,
+        detail="Current ticket status is invalid"
+     )
+    ticket.status = status_data.status.value
+
+    try: 
+        database_session.commit()
+        database_session.refresh(ticket)
+    except Exception:
+        database_session.rollback()
+        raise
+
+    return ticket
+
+    
     

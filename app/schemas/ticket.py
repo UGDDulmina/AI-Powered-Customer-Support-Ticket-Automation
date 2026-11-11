@@ -47,6 +47,7 @@ class TicketCreate(TicketBase):
 
 class TicketUpdate(TicketBase):
     status: TicketStatus 
+    priority: TicketPriority
 
 class TicketResponse(TicketBase):
     id: int
@@ -57,6 +58,19 @@ class TicketResponse(TicketBase):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+class TicketStatusUpdate(BaseModel):
+    status: TicketStatus 
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+class TicketPriorityUpdate(BaseModel):
+    priority: TicketPriority
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
 
 
 
