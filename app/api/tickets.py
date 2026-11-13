@@ -11,20 +11,30 @@ from fastapi import (
 from sqlalchemy import select
 
 from app.models.customer import Customer
+from app.models.support_agent import SupportAgent
 from app.models.ticket import Ticket
 
 from sqlalchemy.orm import Session
 
+from app.models.ticket_activity import TicketActivity
 from app.schemas.ticket import (
+    TicketAssignRequest,
     TicketResponse, 
     TicketCreate,
     TicketUpdate,
     TicketStatus,
     TicketStatusUpdate,
     TicketPriorityUpdate,
-    TicketPriority
+    TicketPriority,
+    TicketPaginatedResponse
 )
 from app.db.dependencies import get_db 
+
+from sqlalchemy import func, select
+
+import math
+
+from app.schemas.ticket_activity import TicketActivityAction
 
 ALLOWED_STATUS = {
     TicketStatus.OPEN: {
@@ -79,7 +89,20 @@ def create_ticket(
     database_session.add(ticket)
 
     try:
+        database_session.flush()
+
+        activity = TicketActivity(
+            ticket_id=ticket.id,
+            action = TicketActivityAction.CREATED.value,
+            old_value = None,
+            new_value = ticket.status,
+            performed_by = "system"
+        )
+
+        database_session.add(activity)
         database_session.commit()
+        database_session.refresh(ticket)
+
         database_session.refresh(ticket)
     except Exception:
         database_session.rollback()
@@ -109,9 +132,13 @@ def get_ticket(
 
 @router.get(
     "",
-    response_model=list[TicketResponse]
+    response_model=TicketPaginatedResponse
 )
 def get_tickets(
+    assigned_agent_id: int | None = Query(
+        default=None,
+        ge=1
+    ),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     search: str | None = Query(
@@ -119,7 +146,7 @@ def get_tickets(
     ),
     customer_id: int | None = Query(
         default=None,
-        min_length=1
+        ge=1
     ),
     status: TicketStatus | None = Query(
         default=None
@@ -156,7 +183,17 @@ def get_tickets(
             Ticket.priority == priority.value
         )
 
-    
+    if assigned_agent_id is not None:
+        statement = statement.where(
+            Ticket.assigned_agent_id == assigned_agent_id
+        )
+
+    count_statement = select(func.count()).select_from(Ticket)
+
+    total = database_session.scalar(count_statement)
+    total_pages = math.ceil(total/limit)
+    has_next = page < total_pages
+    has_previous = page > 1
 
     statement = (
         statement
@@ -167,7 +204,15 @@ def get_tickets(
 
     tickets = database_session.scalars(statement).all()
 
-    return tickets
+    return {
+        "items": tickets,
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "has_next": has_next,
+        "has_previous":has_previous
+    }
 
 @router.put(
     "/{ticket_id}",
@@ -222,14 +267,36 @@ def status_update(
             detail="Ticket not found"
         )
 
-    allowed = ALLOWED_STATUS.get(ticket.status)
+    try:
+       current_status = TicketStatus(ticket.status)
+
+    except ValueError:
+      
+      raise HTTPException(
+         status_code=409,
+         detail="Current ticket status is invalid"
+      )
+
+    allowed = ALLOWED_STATUS.get(current_status, set())
 
     if status_data.status not in allowed:
      raise HTTPException(
         status_code=409,
         detail="Current ticket status is invalid"
      )
+
+    old_status = ticket.status
+    
     ticket.status = status_data.status.value
+
+    activity = TicketActivity(
+       ticket_id = ticket.id,
+       action = TicketActivityAction.STATUS_CHANGED.value,
+       old_value = old_status,
+       new_value = status_data.status.value,
+       performed_by = "system"
+    )
+    database_session.add(activity)
 
     try: 
         database_session.commit()
@@ -257,8 +324,23 @@ def priority_update(
           detail="Ticket is not found"
       ) 
 
+  old_priority = ticket.priority
+
   ticket.priority = priority_data.priority.value
 
+  activity = TicketActivity(
+      ticket_id = ticket.id,
+      action = TicketActivityAction.PRIORITY_CHANGED.value,
+      old_value= old_priority,
+      new_value= priority_data.priority.value,
+      performed_by = "system"
+  )
+
+  if old_priority == priority_data.priority.value:
+      return ticket
+
+  database_session.add(activity)
+ 
   try: 
         database_session.commit()
         database_session.refresh(ticket)
@@ -268,6 +350,62 @@ def priority_update(
   
   return ticket
 
+@router.patch(
+    "/{ticket_id}/assign",
+    response_model=TicketResponse
+)
+def assign_agent(
+    ticket_id: int,
+    assignment_data: TicketAssignRequest, 
+    database_session: Session = Depends(get_db)
+):
+    ticket = database_session.get(Ticket,ticket_id)
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Not found"
+        )
+
+    agent = database_session.get(SupportAgent, 
+                    assignment_data.agent_id)
+
+    if agent is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Not found"
+        )
+    if not agent.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail="Not found"
+        )
+    ticket.assigned_agent = agent
+    ticket.assigned_agent_id = agent.id
+
+    old_agent_id = ticket.assigned_agent_id
+    new_agent_id = agent.id
+
+    if old_agent_id == new_agent_id:
+        return ticket
+    if old_agent_id is None:
+        action = TicketActivityAction.ASSIGNED.value
+    else:
+        if old_agent_id != new_agent_id:
+            ticket.assigned_agent_id = new_agent_id
+
+    activity = TicketActivity(
+          ticket_id = ticket.id,
+          action = action,
+          old_value= old_agent_id,
+          new_value= new_agent_id,
+          performed_by = "system"
+      )
+
+    database_session.commit()
+    database_session.refresh(ticket)
+
+    return ticket
 
 
     
