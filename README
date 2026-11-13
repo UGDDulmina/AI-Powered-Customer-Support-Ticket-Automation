@@ -1,0 +1,433 @@
+
+# AI-Powered Customer Support & Ticket Automation System
+
+A scalable backend application built with FastAPI, Python, PostgreSQL, SQLAlchemy, and Pydantic to manage customer support operations and automate ticket workflows using AI-powered features.
+
+The system provides RESTful APIs for customer management, ticket handling, support agent management, ticket activity tracking, and analytics.
+
+The project is designed to evolve into an intelligent customer support platform with automatic ticket classification, AI-generated response suggestions, and workflow automation.
+
+## Project Overview
+
+Customer support teams often face challenges such as:
+
+- Managing large numbers of support requests.
+- Assigning tickets to appropriate support agents.
+- Tracking ticket status and priority.
+- Maintaining accurate ticket activity histories.
+- Monitoring support performance.
+- Responding to repetitive customer questions.
+
+This project addresses these challenges through a centralized backend system and planned AI-powered automation.
+
+## Technology Stack
+
+Python - Backend programming language 
+FastAPI - REST API development 
+PostgreSQL - Relational database 
+SQLAlchemy - ORM and database operations 
+Alembic -  Database migrations 
+Pydantic - Request and response validation 
+Uvicorn - ASGI application server 
+Swagger - UI  Interactive API documentation 
+
+## Features
+
+### Customer Management
+
+- Create new customers.
+- Retrieve customer information.
+- Update customer details.
+- Delete customer records.
+- Manage customer-related support tickets.
+
+### Ticket Management
+
+- Create support tickets.
+- Retrieve ticket details.
+- Update ticket information.
+- Delete tickets.
+- Manage ticket status and priority.
+- Associate tickets with customers.
+
+### Ticket Status Management
+
+Supported ticket statuses:
+
+- `open`
+- `in_progress`
+- `resolved`
+- `closed`
+
+Status transitions are validated to prevent unsupported workflow changes.
+
+### Ticket Priority Management
+
+Supported priority levels:
+
+- `low`
+- `medium`
+- `high`
+- `urgent`
+
+Ticket priorities can be updated through dedicated API endpoints.
+
+### Support Agent Management
+
+- Create support agents.
+- Retrieve agent information.
+- Update agent details.
+- Deactivate agents.
+- Assign tickets to active agents.
+- Reassign tickets between agents.
+- Prevent assignment to inactive agents.
+
+### Ticket Messages
+
+- Add messages to support tickets.
+- Retrieve ticket conversations.
+- Identify message senders.
+
+Supported sender types:
+
+- Customer
+- Support Agent
+- AI
+
+### Search, Filtering, and Pagination
+
+Retrieve tickets using:
+
+- Ticket status
+- Ticket priority
+- Customer ID
+- Assigned agent ID
+- Subject search
+
+Pagination supports page numbers, result limits, total records, and navigation metadata.
+
+### Dashboard Analytics
+
+The backend provides ticket statistics, including:
+
+- Total tickets
+- Ticket counts by status
+- Ticket counts by priority
+- Ticket overview information
+
+These APIs can support an administrative dashboard.
+
+### Ticket Activity Logging
+
+The system tracks important ticket events:
+
+- Ticket creation
+- Agent assignment
+- Agent reassignment
+- Status changes
+- Priority changes
+
+Each activity record contains:
+
+- Ticket ID
+- Activity type
+- Previous value
+- New value
+- Performed-by information
+- Timestamp
+
+Activity history can be retrieved in chronological order.
+
+## AI Automation Roadmap
+
+The AI-related functionality is being developed in stages.
+
+Planned capabilities include:
+
+### Automatic Ticket Categorization
+
+Automatically categorize incoming tickets into:
+
+- Billing
+- Technical
+- Account
+- Shipping
+- Refund
+- General
+
+### AI-Based Ticket Classification
+
+Use AI models to understand customer messages and classify support requests.
+
+### AI Response Suggestions
+
+Generate suggested responses to customer support questions.
+
+### Intelligent Ticket Prioritization
+
+Analyze customer messages to recommend appropriate ticket priorities.
+
+### Support Workflow Automation
+
+Automate repetitive ticket management processes and assist support agents.
+
+## Project Structure
+
+```text
+ai-support-backend/
+|
+|-- app/
+|   |-- api/
+|   |   |-- v1/
+|   |
+|   |-- core/
+|   |
+|   |-- db/
+|   |
+|   |-- models/
+|   |   |-- customer.py
+|   |   |-- ticket.py
+|   |   |-- ticket_message.py
+|   |   |-- support_agent.py
+|   |   |-- ticket_activity.py
+|   |
+|   |-- schemas/
+|   |   |-- customer.py
+|   |   |-- ticket.py
+|   |   |-- ticket_message.py
+|   |   |-- support_agent.py
+|   |   |-- ticket_activity.py
+|   |
+|   |-- services/
+|   |   |-- ticket_categorizer.py
+|   |
+|   |-- main.py
+|
+|-- alembic/
+|   |-- versions/
+|
+|-- alembic.ini
+|-- requirements.txt
+|-- .env
+|-- README.md
+```
+
+Note: This is the intended high-level project structure. Some modules, particularly AI services, are still under development.
+
+## Getting Started
+
+### Prerequisites
+
+Install the following:
+
+- Python 3.11 or later
+- PostgreSQL
+- Git
+- Visual Studio Code or another Python IDE
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/UGDDulmina/AI-Powered-Customer-Support-Ticket-Automation
+
+Navigate to the project directory:
+
+```bash
+cd ai-support-backend
+```
+
+### 2. Create a Virtual Environment
+
+```bash
+python -m venv .venv
+```
+
+Activate the virtual environment.
+
+Windows:
+
+```bash
+.venv\Scripts\activate
+```
+
+Linux/macOS:
+
+```bash
+source .venv/bin/activate
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Configure PostgreSQL
+
+Create a PostgreSQL database:
+
+```sql
+CREATE DATABASE ai_support_db;
+```
+
+### 5. Configure Environment Variables
+
+Create a `.env` file in the project root.
+
+Example:
+
+```env
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/ai_support_db
+```
+
+Adjust the database connection string according to the PostgreSQL driver and configuration used in your application.
+
+Never commit real database credentials or the `.env` file to GitHub.
+
+### 6. Run Database Migrations
+
+```bash
+alembic upgrade head
+```
+
+This applies the available Alembic migrations to your database.
+
+### 7. Start the FastAPI Server
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The application should be available at:
+
+```text
+http://127.0.0.1:8000
+```
+
+### 8. Open API Documentation
+
+Swagger UI:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+ReDoc:
+
+```text
+http://127.0.0.1:8000/redoc
+```
+
+## Database Design
+
+The application uses PostgreSQL with SQLAlchemy ORM.
+
+### Main Entities
+
+Customer
+
+Stores customer information.
+
+Ticket
+
+Stores support requests, status, priority, category, and assignment information.
+
+TicketMessage
+
+Stores conversations associated with support tickets.
+
+SupportAgent
+
+Stores support agent information and active status.
+
+TicketActivity
+
+Stores audit history for ticket-related changes.
+
+### Relationships
+
+- One customer can create multiple tickets.
+- One ticket belongs to one customer.
+- One ticket can contain multiple messages.
+- One support agent can be assigned multiple tickets.
+- One ticket can have one currently assigned agent.
+- One ticket can have multiple activity records.
+
+## Error Handling
+
+The application uses HTTP status codes to indicate API outcomes.
+
+
+
+| 200 | Successful request 
+| 201 | Resource created 
+| 404 | Resource not found 
+| 409 | Conflict or invalid workflow transition 
+| 422 | Request validation error 
+| 500 | Internal server error 
+
+## Development and Testing
+
+The project uses FastAPI's interactive Swagger UI for manual endpoint testing.
+
+Important test scenarios include:
+
+- Creating customers and tickets.
+- Updating ticket status and priority.
+- Validating ticket status transitions.
+- Assigning and reassigning agents.
+- Rejecting inactive agents.
+- Filtering and paginating tickets.
+- Recording ticket activities.
+- Preventing duplicate activity records.
+- Retrieving chronological activity history.
+- Verifying database transaction consistency.
+
+Automated tests and full integration verification remain part of the development roadmap.
+
+## Future Improvements
+
+- AI-powered ticket classification.
+- Intelligent priority prediction.
+- AI-generated response suggestions.
+- Automated ticket routing.
+- AI-assisted customer support conversations.
+- Authentication and role-based authorization.
+- Automated testing with pytest.
+- Docker containerization.
+- CI/CD integration.
+- Production deployment.
+- Frontend dashboard integration.
+
+## Development Status
+
+Status: Active Development
+
+The core customer support backend and ticket management modules have been implemented.
+
+The AI automation module, final integration testing, and production deployment are still in progress.
+
+## Learning Objectives
+
+This project demonstrates practical experience with:
+
+- RESTful API development.
+- Python backend architecture.
+- FastAPI dependency injection.
+- PostgreSQL database design.
+- SQLAlchemy ORM relationships.
+- Alembic database migrations.
+- Pydantic data validation.
+- CRUD operations.
+- Search, filtering, and pagination.
+- Business workflow validation.
+- Transaction management.
+- Activity logging and audit trails.
+- API testing.
+- AI service integration architecture.
+
+## License
+
+No license has been specified yet.
+
+Copyright (c) 2026. All rights reserved.

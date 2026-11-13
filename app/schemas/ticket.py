@@ -89,6 +89,19 @@ class TicketAssignRequest(BaseModel):
         extra="forbid"
     )
 
+class TicketCategorizeRequest(BaseModel):
+    subject: str = Field(
+        min_length=1,
+        max_length=225
+    )
+    description: str = Field(
+        min_length=1
+    )
+
+class TicketCategorizeResponse(BaseModel):
+    category: str
+    
+
 
 
 
