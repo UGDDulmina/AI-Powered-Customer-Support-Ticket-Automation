@@ -54,6 +54,7 @@ class TicketResponse(TicketBase):
     customer_id: int 
     status: TicketStatus
     created_at: datetime
+    assigned_agent_id: int | None
 
     model_config = ConfigDict(
         from_attributes=True
@@ -67,6 +68,23 @@ class TicketStatusUpdate(BaseModel):
 
 class TicketPriorityUpdate(BaseModel):
     priority: TicketPriority
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+class TicketPaginatedResponse(BaseModel):
+    item: list[TicketResponse]
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    has_next: bool
+    has_previous: bool
+
+class TicketAssignRequest(BaseModel):
+    agent_id: int = Field(
+        gt=0
+    )
     model_config = ConfigDict(
         extra="forbid"
     )

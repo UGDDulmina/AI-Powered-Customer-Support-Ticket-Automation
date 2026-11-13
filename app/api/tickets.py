@@ -1,4 +1,4 @@
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from fastapi import (
     APIRouter,
@@ -34,7 +34,11 @@ from sqlalchemy import func, select
 
 import math
 
-from app.schemas.ticket_activity import TicketActivityAction
+from app.schemas.ticket_activity import (
+    TicketActivityAction, 
+    TicketActivityResponse
+)
+
 
 ALLOWED_STATUS = {
     TicketStatus.OPEN: {
@@ -380,32 +384,76 @@ def assign_agent(
             status_code=409,
             detail="Not found"
         )
+
+    if old_agent_id == new_agent_id:
+            return ticket
+    
+    old_agent_id = ticket.assigned_agent_id
+    
     ticket.assigned_agent = agent
     ticket.assigned_agent_id = agent.id
 
-    old_agent_id = ticket.assigned_agent_id
     new_agent_id = agent.id
 
-    if old_agent_id == new_agent_id:
-        return ticket
+    
     if old_agent_id is None:
         action = TicketActivityAction.ASSIGNED.value
     else:
-        if old_agent_id != new_agent_id:
-            ticket.assigned_agent_id = new_agent_id
+        action = TicketActivityAction.REASSIGNED.value 
 
     activity = TicketActivity(
           ticket_id = ticket.id,
           action = action,
-          old_value= old_agent_id,
-          new_value= new_agent_id,
+          old_value= str(old_agent_id) if old_agent_id is not None else None,
+          new_value= str(new_agent_id),
           performed_by = "system"
-      )
+    )
 
-    database_session.commit()
-    database_session.refresh(ticket)
+    database_session.add(activity)
+
+    try:
+       database_session.commit()
+       database_session.refresh(ticket)
+    except SQLAlchemyError:
+        database_session.rollback()
+        raise
 
     return ticket
+
+@router.get(
+    "/{ticket_id}/activities",
+    response_model=list[TicketActivityResponse]
+)
+def get_activities(
+    ticket_id : int = Path(gt=0),
+    database_session: Session = Depends(get_db)
+):
+    statement = select(TicketActivity)
+
+    ticket = database_session.get(Ticket, ticket_id)
+    
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Not found"
+        )
+
+    statement = statement.where(
+        TicketActivity.ticket_id == ticket_id
+    )
+
+    statement = statement.order_by(
+        TicketActivity.created_at.asc(),
+        TicketActivity.id.asc()
+    )
+
+    activities = database_session.scalars(statement).all()
+
+    
+
+    return activities
+
+
 
 
     
