@@ -29,9 +29,7 @@ class TicketBase(BaseModel):
         min_length=10
     )
 
-    priority: TicketPriority = Field(
-        default= TicketPriority.MEDIUM
-    )
+    priority: TicketPriority | None=None 
 
     category: str | None = Field(
         max_length=50,
@@ -100,6 +98,18 @@ class TicketCategorizeRequest(BaseModel):
 
 class TicketCategorizeResponse(BaseModel):
     category: str
+
+class TicketPriorityRequest(BaseModel):
+    subject: str = Field(
+        min_length=1,
+        max_length=225
+    )
+    description: str = Field(
+        min_length=1
+    )
+
+class TicketPriorityResponse(BaseModel):
+    priority: TicketPriority
     
 
 

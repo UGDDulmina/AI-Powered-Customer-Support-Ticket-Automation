@@ -1,44 +1,38 @@
-from app.services.ticket_categorizer import categorize_ticket
+from app.services.ticket_priprity_predictor import predict_ticket_priority
 
 tests = [
     (
+        "Production server down",
+        "The entire system is unavailable",
+        "urgent"
+    ),
+    (
         "Payment failed",
-        "My payment was charged twice and the invoice is missing",
-        "billing"
+        "Customers cannot pay",
+        "high"
     ),
     (
-        "Login problem",
-        "I forgot my password",
-        "account"
+        "Login issue",
+        "I need a password reset",
+        "medium"
     ),
     (
-        "Application crash",
-        "The server shows an error",
-        "technical"
+        "Profile picture",
+        "I want to change my profile picture",
+        "low"
     ),
     (
-        "Delivery delayed",
-        "My package tracking is not updating",
-        "shipping"
-    ),
-    (
-        "Return request",
-        "I want a refund and my money back",
-        "refund"
-    ),
-    (
-        "General question",
-        "I need more information",
-        "general"
+        "Customer question",
+        "I would like to know more about your services",
+        "medium"
     )
 ]
 
 for subject, description, expected in tests:
-
-    actual = categorize_ticket(subject, description)
+    actual = predict_ticket_priority(subject, description)
 
     assert actual == expected, (
         f"Expected {expected}, but got {actual}"
     )
 
-print("All categorization tests passed!")
+print("All priority prediction tests passed!")

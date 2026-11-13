@@ -41,8 +41,6 @@ def categorize_ticket(subject: str, description: str) -> str:
 
     category_scores = {}
 
-
-
     for category, keywords in CATEGORY_KEYWORDS.items():
         score = sum(
             keyword in text 

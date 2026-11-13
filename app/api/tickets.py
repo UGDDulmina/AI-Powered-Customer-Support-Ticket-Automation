@@ -10,15 +10,23 @@ from fastapi import (
 )
 from sqlalchemy import select
 
+from app.services.ticket_priprity_predictor import (
+    predict_ticket_priority,
+    explain_ticket_priority
+)
+
 from app.models.customer import Customer
 from app.models.support_agent import SupportAgent
 from app.models.ticket import Ticket
 
 from sqlalchemy.orm import Session
+from app.services.ticket_categorizer import categorize_ticket
 
 from app.models.ticket_activity import TicketActivity
 from app.schemas.ticket import (
     TicketAssignRequest,
+    TicketPriorityRequest,
+    TicketPriorityResponse,
     TicketResponse, 
     TicketCreate,
     TicketUpdate,
@@ -26,7 +34,9 @@ from app.schemas.ticket import (
     TicketStatusUpdate,
     TicketPriorityUpdate,
     TicketPriority,
-    TicketPaginatedResponse
+    TicketPaginatedResponse,
+    TicketCategorizeResponse,
+    TicketCategorizeRequest
 )
 from app.db.dependencies import get_db 
 
@@ -38,6 +48,8 @@ from app.schemas.ticket_activity import (
     TicketActivityAction, 
     TicketActivityResponse
 )
+
+from app.services.ticket_categorizer import categorize_ticket
 
 
 ALLOWED_STATUS = {
@@ -80,14 +92,26 @@ def create_ticket(
            detail="Customer not found"
         )
 
+    predicted_category = categorize_ticket(
+        subject= ticket_data.subject,
+        description=ticket_data.description
+    )
+
+    if ticket_data.priority is not None:
+        final_priority = ticket_data.priority.value
+    else:
+        final_priority = predict_ticket_priority(
+            subject=ticket_data.subject,
+            description=ticket_data.description
+        )
+
     ticket = Ticket(
         customer_id = ticket_data.customer_id,
         description = ticket_data.description,
-        priority = ticket_data.priority.value,
-        category = ticket_data.category,
+        priority = final_priority,
+        category = predicted_category,
         status = TicketStatus.OPEN.value,
-        subject = ticket_data.subject,
-        customer = customer
+        subject = ticket_data.subject
     )
 
     database_session.add(ticket)
@@ -452,6 +476,41 @@ def get_activities(
     
 
     return activities
+
+@router.post(
+    "/tickets/categorize",
+    response_model = TicketCategorizeResponse
+)
+def find_category(
+    message_data: TicketCategorizeRequest
+):
+    category = categorize_ticket(
+        message_data.subject,
+        message_data.description
+    )
+
+    return TicketCategorizeResponse(
+        category=category
+    )
+
+@router.post(
+    "/tickets/predict-priority",
+    response_model = TicketPriorityResponse
+)
+def preview_ticket_priority(
+    message_data: TicketPriorityRequest
+):
+
+    result = explain_ticket_priority(
+        message_data.subject,
+        message_data.description
+    )
+
+    return TicketPriorityResponse(
+        predicted_priority=result["predicted_priority"],
+        matched_keywords=result["matched_keywords"],
+        reason=result["reason"]
+    )
 
 
 
