@@ -38,3 +38,11 @@ class SupportAgentResponse(SupportAgentBase):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+class AgentWorkloadResponse(BaseModel):
+    agent_id: int
+    agent_name: str
+    is_active: bool
+    active_tickets: int
+
+    
