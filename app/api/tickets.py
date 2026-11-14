@@ -1,4 +1,5 @@
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.services.agent_assignment_service import find_least_busy_agent
 
 from fastapi import (
     APIRouter,
@@ -105,13 +106,21 @@ def create_ticket(
             description=ticket_data.description
         )
 
+    selected_agent = find_least_busy_agent(database_session)
+
+    if selected_agent is not None:
+        assigned_agent_id = selected_agent.id
+    else:
+        assigned_agent_id = None
+
     ticket = Ticket(
         customer_id = ticket_data.customer_id,
         description = ticket_data.description,
         priority = final_priority,
         category = predicted_category,
         status = TicketStatus.OPEN.value,
-        subject = ticket_data.subject
+        subject = ticket_data.subject,
+        assigned_agent_id=assigned_agent_id
     )
 
     database_session.add(ticket)
@@ -127,6 +136,17 @@ def create_ticket(
             performed_by = "system"
         )
 
+        if selected_agent is not None:
+
+            assignment_activity = TicketActivity(
+                ticket_id = ticket.id,
+                action= TicketActivityAction.ASSIGNED.value,
+                old_value = None,
+                new_value=str(selected_agent.id),
+                performend_by="system"
+            )
+            
+        database_session.add(assignment_activity)
         database_session.add(activity)
         database_session.commit()
         database_session.refresh(ticket)
