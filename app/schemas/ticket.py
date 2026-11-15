@@ -1,8 +1,6 @@
 from datetime import datetime
 from enum import Enum
 
-from app.services.agent_assignment_service import find_least_busy_agent
-
 from pydantic import(
  BaseModel,
  ConfigDict,
@@ -117,6 +115,11 @@ class TicketPriorityResponse(BaseModel):
     priority: TicketPriority
     matched_keywords: list[str]
     reason: str
+
+class TicketReplySuggestionResponse(BaseModel):
+    ticket_id: int
+    subject: str
+    suggested_reply: str
     
 
 

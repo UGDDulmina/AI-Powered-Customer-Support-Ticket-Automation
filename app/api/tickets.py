@@ -1,5 +1,7 @@
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.models.ticket_message import TicketMessage
 from app.services.agent_assignment_service import find_least_busy_agent
+from app.services.ai_response_validator import validate_ai_reply
 
 from fastapi import (
     APIRouter,
@@ -11,6 +13,7 @@ from fastapi import (
 )
 from sqlalchemy import select
 
+from app.services.ai_response_service import format_conversation_history, generate_ticket_reply
 from app.services.ticket_priprity_predictor import (
     predict_ticket_priority,
     explain_ticket_priority
@@ -28,6 +31,7 @@ from app.schemas.ticket import (
     TicketAssignRequest,
     TicketPriorityRequest,
     TicketPriorityResponse,
+    TicketReplySuggestionResponse,
     TicketResponse, 
     TicketCreate,
     TicketUpdate,
@@ -145,7 +149,7 @@ def create_ticket(
                 new_value=str(selected_agent.id),
                 performend_by="system"
             )
-            
+
         database_session.add(assignment_activity)
         database_session.add(activity)
         database_session.commit()
@@ -530,6 +534,64 @@ def preview_ticket_priority(
         predicted_priority=result["predicted_priority"],
         matched_keywords=result["matched_keywords"],
         reason=result["reason"]
+    )
+
+@router.post(
+    "/{ticket_id}/suggest-reply",
+    response_model=TicketReplySuggestionResponse
+)
+def suggest_ticket_reply(
+    ticket_id: int,
+    database_session: Session = Depends(get_db)
+):
+
+    ticket = database_session.get(Ticket, ticket_id)
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket not found"
+        )
+    statement = (
+            select(TicketMessage)
+            .where(
+                TicketMessage.ticket_id == ticket_id
+            )
+            .order_by(
+                TicketMessage.created_at.asc(),
+                TicketMessage.id.asc()
+            )
+        )
+    
+    messages = database_session.scalars(statement).all()
+    
+    con_history = format_conversation_history(messages)
+
+    try:
+        suggest_reply = generate_ticket_reply(
+            ticket.subject,
+            ticket.description,
+            conversation_history= con_history
+        )
+
+    except Exception:
+        raise HTTPException(
+            status_code=503,
+            detail="AI reply suggestion is temporarily unavailable"
+        )
+
+    if not suggest_reply or not suggest_reply.strip():
+        raise HTTPException(
+            status_code=503,
+            detail="Reply not found"
+        )
+
+    
+
+    return TicketReplySuggestionResponse(
+        ticket_id=ticket.id,
+        subject=ticket.subject,
+        suggested_reply= suggest_reply
     )
 
 

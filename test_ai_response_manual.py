@@ -1,9 +1,28 @@
-from app.services.ai_response_service import generate_test_response
+from app.services.ai_response_service import generate_ticket_reply
 
-result = generate_test_response()
+test_cases = [
+    {
+        "subject": "Login problem",
+        "description": "I cannot access my account after resetting my password."
+    },
+    {
+        "subject": "Double payment",
+        "description": "My card was charged twice for the same subscription."
+    },
+    {
+        "subject": "Delivery delayed",
+        "description": "My package has not arrived after the expected delivery date."
+    }
+]
 
-print("AI Generated Response:")
-print(result)
+for ticket in test_cases:
+    reply = generate_ticket_reply(
+        subject=ticket["subject"],
+        description=ticket["description"]
+    )
 
-assert isinstance(result, str)
-assert result.strip()
+    print("\nTicket:", ticket["subject"])
+    print("AI Reply:", reply)
+
+    assert isinstance(reply, str)
+    assert reply.strip()
