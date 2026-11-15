@@ -1,5 +1,8 @@
 from datetime import datetime
 from enum import Enum
+from typing import Literal
+
+from app.models.ai_reply_suggestion import AIReplySuggestion
 
 from pydantic import(
  BaseModel,
@@ -18,6 +21,8 @@ class TicketStatus(str, Enum):
     IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
     CLOSED = "closed"
+
+
 
 class TicketBase(BaseModel):
     subject: str = Field(
@@ -117,9 +122,24 @@ class TicketPriorityResponse(BaseModel):
     reason: str
 
 class TicketReplySuggestionResponse(BaseModel):
+    id:int
+    status: str
     ticket_id: int
     subject: str
     suggested_reply: str
+
+class AIReplySuggestionListResponse(BaseModel):
+    id:int
+    ticket_id:int
+    suggested_reply: str
+    edited_reply: str | None
+    status:str
+    created_at:datetime
+
+class AIReplyReviewRequest(BaseModel):
+    agent_id:int = Field(gt=0)
+    action: Literal["approve","reject"]
+    edited_reply: str | None
     
 
 

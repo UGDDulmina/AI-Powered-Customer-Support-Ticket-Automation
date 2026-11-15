@@ -1,4 +1,7 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from app.models.ai_reply_suggestion import AIReplySuggestion
 from app.models.ticket_message import TicketMessage
 from app.services.agent_assignment_service import find_least_busy_agent
 from app.services.ai_response_validator import validate_ai_reply
@@ -28,6 +31,9 @@ from app.services.ticket_categorizer import categorize_ticket
 
 from app.models.ticket_activity import TicketActivity
 from app.schemas.ticket import (
+    AIReplyReviewRequest,
+    AIReplySuggestionListResponse,
+    AIReplyReviewRequest,
     TicketAssignRequest,
     TicketPriorityRequest,
     TicketPriorityResponse,
@@ -580,20 +586,150 @@ def suggest_ticket_reply(
             detail="AI reply suggestion is temporarily unavailable"
         )
 
-    if not suggest_reply or not suggest_reply.strip():
+    validate = validate_ai_reply(suggest_reply)
+
+    if validate["is_valid"] == False:
         raise HTTPException(
             status_code=503,
-            detail="Reply not found"
+            detail="Invalid response."
         )
 
+    reply_suggestion = AIReplySuggestion(
+        ticket_id=ticket.id,
+        suggested_reply=suggest_reply,
+        status="pending"
+    )
+
+    database_session.add(reply_suggestion)
+
+    try:
+        database_session.commit()
+        database_session.refresh(reply_suggestion)
+    except SQLAlchemyError:
+        database_session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to save AI reply suggestion"
+        )
     
 
     return TicketReplySuggestionResponse(
+        id=reply_suggestion.id,
+        status=reply_suggestion.status,
         ticket_id=ticket.id,
         subject=ticket.subject,
-        suggested_reply= suggest_reply
+        suggested_reply= reply_suggestion.suggested_reply
     )
 
+@router.get(
+    "/{ticket_id}/ai-suggestions",
+    response_model=list[AIReplySuggestionListResponse]
+)
+def get_pending_ai_suggestions(
+    ticket_id: int,
+    database_session: Session = Depends(get_db)
+):
+
+    ticket = database_session.get(Ticket, ticket_id)
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Ticket Not found"
+        )
+
+    statement = (
+        select(AIReplySuggestion)
+        .where(
+          AIReplySuggestion.ticket_id == ticket_id,
+          AIReplySuggestion.status == "pending"
+        ).order_by(
+            AIReplySuggestion.created_at.desc(),
+             AIReplySuggestion.id.desc()
+        ) 
+      )
+
+    result = database_session.scalars(statement).all()
+
+    return result
+
+@router.patch("/{suggestion_id}/review")
+def review_ai_suggestion(
+    suggestion_id: int,
+    payload: AIReplyReviewRequest,
+    database_session: Session = Depends(get_db)
+):  
+    suggestion = database_session.get(AIReplySuggestion, suggestion_id)
+
+    if suggestion is None:
+        raise HTTPException (
+            status_code=404,
+            detail="Not found"
+    )
+
+    if not suggestion.status == "pending":
+        raise HTTPException(
+            status_code=409,
+            detail="Suggestion has already been reviewed"
+        )
+    
+    agent = database_session.get(SupportAgent, payload.agent_id)
+
+    if agent is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Agent not found"
+    )
+
+    if not agent.is_active:
+        raise HTTPException(
+            status_code=403,
+            detail="Inactive agents cannot review suggestions"
+    )
+
+    if payload.action =="approve":
+        suggestion.status = "approved"
+        if payload.edited_reply is not None:
+            suggestion.edited_reply = payload.edited_reply.strip()
+    
+        elif payload.action == "reject":
+          if payload.edited_reply is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Rejected suggestions cannot contain edited replies"
+            )
+
+        suggestion.status = "rejected"
+        suggestion.edited_reply = None
+
+     
+    suggestion.reviewed_by_agent_id = agent.id
+    suggestion.reviewed_at = datetime.now(timezone.utc)
+
+     
+    try:
+        database_session.commit()
+        database_session.refresh(suggestion)
+
+    except SQLAlchemyError:
+        database_session.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to review AI suggestion"
+        )
+
+    return AIReplyReviewRequest(
+        id=suggestion.id,
+        ticket_id=suggestion.ticket_id,
+        status=suggestion.status,
+        suggested_reply=suggestion.suggested_reply,
+        edited_reply=suggestion.edited_reply,
+        reviewed_by_agent_id=suggestion.reviewed_by_agent_id,
+        reviewed_at=suggestion.reviewed_at
+    )
+
+
+    
 
 
 
