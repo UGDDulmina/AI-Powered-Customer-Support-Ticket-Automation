@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.db.session import get_db
+from app.db.dependencies import get_db
 
 from app.models.ai_reply_suggestion import AIReplySuggestion
 from app.models.support_agent import SupportAgent

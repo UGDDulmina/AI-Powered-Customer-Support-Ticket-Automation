@@ -1,5 +1,13 @@
 from datetime import datetime, timezone
 
+from fastapi import BackgroundTasks
+from app.schemas.ai_automation_job import AIAutomationJobResponse
+from app.services.ticket_automation_service import (
+    generate_ai_suggestion_for_ticket
+)
+
+from app.models.ai_automation_job import AIAutomationJob
+
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.models.ai_reply_suggestion import AIReplySuggestion
 from app.models.ticket_message import TicketMessage
@@ -90,6 +98,7 @@ router = APIRouter(
 )
 def create_ticket(
     ticket_data: TicketCreate,
+    background_tasks: BackgroundTasks,
     database_session: Session = Depends(get_db)
 ):
     customer = database_session.get(
@@ -122,6 +131,14 @@ def create_ticket(
         assigned_agent_id = selected_agent.id
     else:
         assigned_agent_id = None
+
+    automation_job = AIAutomationJob(
+      ticket_id=ticket.id,
+      status="pending",
+      attempt_count=0
+    )
+
+    database_session.add(automation_job)
 
     ticket = Ticket(
         customer_id = ticket_data.customer_id,
@@ -159,6 +176,11 @@ def create_ticket(
         database_session.add(assignment_activity)
         database_session.add(activity)
         database_session.commit()
+
+        background_tasks.add_task(
+             generate_ai_suggestion_for_ticket,
+             ticket.id
+        )
         database_session.refresh(ticket)
 
         database_session.refresh(ticket)
@@ -602,10 +624,13 @@ def suggest_ticket_reply(
 
     database_session.add(reply_suggestion)
 
+     
     try:
         database_session.commit()
         database_session.refresh(reply_suggestion)
+    
     except SQLAlchemyError:
+
         database_session.rollback()
         raise HTTPException(
             status_code=500,
@@ -728,6 +753,30 @@ def review_ai_suggestion(
         reviewed_at=suggestion.reviewed_at
     )
 
+@router.get(
+    "/{ticket_id}/ai-automation/jobs",
+    response_model=list[AIAutomationJobResponse]
+)
+def get_ticket_automation_jobs(
+    ticket_id: int,
+    database_session: Session = Depends(get_db)
+):
+    ticket = database_session.get(Ticket, ticket_id)
+
+    if ticket is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Not found"
+        )
+    
+    statement = (
+        select(AIAutomationJob)
+        .where(AIAutomationJob.ticket_id == ticket_id)
+        .order_by(
+            AIAutomationJob.created_at.desc(),
+            AIAutomationJob.id.desc()
+        )
+    )
 
     
 
