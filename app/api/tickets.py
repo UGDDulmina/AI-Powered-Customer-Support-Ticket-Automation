@@ -778,6 +778,12 @@ def get_ticket_automation_jobs(
         )
     )
 
+    jobs = database_session.scalars(statement).all()
+
+    return jobs
+
+
+
     
 
 
