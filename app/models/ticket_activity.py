@@ -1,3 +1,5 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ForeignKey, 
@@ -16,7 +18,10 @@ from sqlalchemy.orm import (
 
 from datetime import datetime
 
-from app.models.ticket import Ticket
+if TYPE_CHECKING:
+    from app.models.ticket import Ticket
+
+
 
 
 class TicketActivity(Base):

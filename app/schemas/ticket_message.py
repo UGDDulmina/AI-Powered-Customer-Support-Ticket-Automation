@@ -15,7 +15,7 @@ class MessageSenderType(str , Enum):
 
 class Order(str, Enum):
     ASC = "asc",
-    DSC = "dsc"
+    DESC = "desc"
 
 class TicketMessageBase(BaseModel):
     sender_type: MessageSenderType

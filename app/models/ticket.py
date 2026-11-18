@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 
 from sqlalchemy import (
@@ -6,12 +8,20 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    Column,
+    Integer
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
-from app.models.customer import Customer
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.support_agent import SupportAgent
+    from app.models.ticket_activity import TicketActivity
+    from app.models.ticket_message import TicketMessage
+    from app.models.customer import Customer
 
 
 class Ticket(Base):
@@ -65,5 +75,17 @@ class Ticket(Base):
     )
 
     messages: Mapped[list["TicketMessage"]] = relationship(
-        back_populates="ticket"
+        back_populates="tickets"
+    )
+
+    assigned_agent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("support_aggents.id"),
+        nullable=True
+    )
+
+    assigned_agent: Mapped[SupportAgent] = relationship(
+        back_populates = "assigned_tickets"
+    )
+    ticket_activities: Mapped[list["TicketActivity"]] = relationship(
+        back_populates = "ticket"
     )

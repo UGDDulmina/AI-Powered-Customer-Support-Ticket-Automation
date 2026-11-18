@@ -7,5 +7,6 @@ __all__ = [
     "Customer",
     "Ticket",
     "TicketMessage",
-    "SupportAgent"
+    "SupportAgent",
+    "TicketActivity"
 ]

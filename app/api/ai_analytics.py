@@ -305,6 +305,11 @@ def get_ai_automation_trends(
         datetime.min.time(),
         tzinfo=timezone.utc
     )
+    end_datetime = datetime.combine(
+        now.date() + timedelta(days=1),
+        datetime.min.time(),
+        tzinfo=timezone.utc
+    )
 
     job_date = func.date(
     func.timezone("UTC", AIAutomationJob.created_at)

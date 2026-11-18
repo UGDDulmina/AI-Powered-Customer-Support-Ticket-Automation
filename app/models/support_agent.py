@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 from datetime import datetime, timezone
 
@@ -6,7 +7,10 @@ from app.db.base import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import Boolean, String, DateTime
 
-from app.models.ticket import Ticket
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.ticket import Ticket
 
 
 class SupportAgent(Base):
@@ -38,4 +42,8 @@ class SupportAgent(Base):
     assigned_tickets: Mapped[Ticket] = relationship(
       "OtherModel",
       back_populates="matching_relationship_name"
+    )
+    assigned_tickets = relationship(
+        "Ticket",
+        back_populates="assigned_agent"
     )

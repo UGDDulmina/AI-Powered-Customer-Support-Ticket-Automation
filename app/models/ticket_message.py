@@ -1,5 +1,10 @@
-from datetime import datetime
+from __future__ import annotations
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+ from app.models.ticket import Ticket
+ 
+from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
@@ -10,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.ticket import Ticket
+
 
 
 class TicketMessage(Base):
