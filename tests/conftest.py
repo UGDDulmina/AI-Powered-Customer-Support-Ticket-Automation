@@ -40,10 +40,33 @@ def override_get_db():
         yield database_session
     finally:
         database_session.close()
+
+@pytest.fixture
+def db_session():
+
+    connection = test_engine.connect()
+    transaction = connection.begin()
+
+    session = TestingSessionLocal(
+        bind=connection,
+        join_transaction_mode="create_savepoint"
+    )
+
+    try:
+        yield session
+
+    finally:
+        session.close()
+        transaction.rollback()
+        connection.close()
+
     
 
 @pytest.fixture
-def client():
+def client(db_session):
+
+    def override_get_db():
+        yield db_session
 
     app.dependency_overrides[get_db] = override_get_db
 
@@ -60,3 +83,36 @@ def sample_customer():
     "email": "john.smith@example.com",
     "phone": "0771234567"
 }
+
+@pytest.fixture
+def created_customer(client, sample_customer):
+
+    response = client.post(
+        "/api/v1/customers",
+        json=sample_customer
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+@pytest.fixture
+def created_ticket(client, created_customer):
+
+    ticket_data = {
+        "customer_id": created_customer["id"],
+        "subject": "Unable to log in",
+        "description": "I cannot access my account.",
+        "priority": "medium"
+    }
+
+    response = client.post(
+        "/api/v1/tickets",
+        json=ticket_data
+    )
+
+    assert response.status_code == 201
+
+    return response.json()
+
+ 

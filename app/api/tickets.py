@@ -132,14 +132,6 @@ def create_ticket(
     else:
         assigned_agent_id = None
 
-    automation_job = AIAutomationJob(
-      ticket_id=ticket.id,
-      status="pending",
-      attempt_count=0
-    )
-
-    database_session.add(automation_job)
-
     ticket = Ticket(
         customer_id = ticket_data.customer_id,
         description = ticket_data.description,
@@ -150,10 +142,18 @@ def create_ticket(
         assigned_agent_id=assigned_agent_id
     )
 
-    database_session.add(ticket)
 
     try:
+        database_session.add(ticket)
         database_session.flush()
+
+        automation_job = AIAutomationJob(
+              ticket_id=ticket.id,
+              status="pending",
+              attempt_count=0
+            )
+        
+        database_session.add(automation_job)
 
         activity = TicketActivity(
             ticket_id=ticket.id,
@@ -163,6 +163,8 @@ def create_ticket(
             performed_by = "system"
         )
 
+        database_session.add(activity)
+
         if selected_agent is not None:
 
             assignment_activity = TicketActivity(
@@ -170,11 +172,11 @@ def create_ticket(
                 action= TicketActivityAction.ASSIGNED.value,
                 old_value = None,
                 new_value=str(selected_agent.id),
-                performend_by="system"
+                performed_by="system"
             )
 
-        database_session.add(assignment_activity)
-        database_session.add(activity)
+            database_session.add(assignment_activity)
+        
         database_session.commit()
 
         background_tasks.add_task(
@@ -183,7 +185,6 @@ def create_ticket(
         )
         database_session.refresh(ticket)
 
-        database_session.refresh(ticket)
     except Exception:
         database_session.rollback()
         raise
@@ -629,13 +630,14 @@ def suggest_ticket_reply(
         database_session.commit()
         database_session.refresh(reply_suggestion)
     
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
 
         database_session.rollback()
+        print("AI SUGGESTION ERROR:", repr(e))
         raise HTTPException(
             status_code=500,
             detail="Failed to save AI reply suggestion"
-        )
+        ) from e
     
 
     return TicketReplySuggestionResponse(

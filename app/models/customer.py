@@ -4,6 +4,7 @@ from sqlalchemy import DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.ticket import Ticket
 
 
 class Customer(Base):

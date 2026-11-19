@@ -1,3 +1,5 @@
+import os
+
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config
@@ -25,9 +27,14 @@ import app.models
 
 target_metadata = Base.metadata
 
+database_url = os.getenv(
+    "ALEMBIC_DATABASE_URL",
+    settings.DATABASE_URL
+)
+
 config.set_main_option(
     "sqlalchemy.url",
-    settings.DATABASE_URL.replace("%", "%%")
+    database_url.replace("%", "%%")
 )
 
 # other values from the config, defined by the needs of env.py,

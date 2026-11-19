@@ -9,6 +9,7 @@ from app.api.tickets import router as tickets_router
 from app.api.ticketMessage import router as ticketMessage_router
 from app.api.stats import router as status_router
 from app.api.ai_suggestions import router as ai_suggestions_router
+from app.api.ai_automation import router as ai_automation_router
 
 app = FastAPI(
     title="AI Customer Support API",
@@ -38,6 +39,11 @@ app.include_router(
 
 app.include_router(
     ai_suggestions_router,
+    prefix="/api/v1"
+)
+
+app.include_router(
+    ai_automation_router,
     prefix="/api/v1"
 )
  

@@ -75,12 +75,13 @@ class Ticket(Base):
     )
 
     messages: Mapped[list["TicketMessage"]] = relationship(
-        back_populates="tickets"
+        back_populates="ticket"
     )
 
     assigned_agent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("support_aggents.id"),
-        nullable=True
+        ForeignKey("support_agents.id"),
+        nullable=True,
+        index=True
     )
 
     assigned_agent: Mapped[SupportAgent] = relationship(
