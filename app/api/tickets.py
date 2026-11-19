@@ -55,7 +55,8 @@ from app.schemas.ticket import (
     TicketPriority,
     TicketPaginatedResponse,
     TicketCategorizeResponse,
-    TicketCategorizeRequest
+    TicketCategorizeRequest,
+    AIReplyReviewResponse
 )
 from app.db.dependencies import get_db 
 
@@ -630,14 +631,13 @@ def suggest_ticket_reply(
         database_session.commit()
         database_session.refresh(reply_suggestion)
     
-    except SQLAlchemyError as e:
+    except SQLAlchemyError:
 
         database_session.rollback()
-        print("AI SUGGESTION ERROR:", repr(e))
         raise HTTPException(
             status_code=500,
             detail="Failed to save AI reply suggestion"
-        ) from e
+        )
     
 
     return TicketReplySuggestionResponse(
@@ -680,7 +680,11 @@ def get_pending_ai_suggestions(
 
     return result
 
-@router.patch("/{suggestion_id}/review")
+@router.patch(
+        "/{suggestion_id}/review",
+        response_model=AIReplyReviewResponse
+        )
+
 def review_ai_suggestion(
     suggestion_id: int,
     payload: AIReplyReviewRequest,
@@ -714,13 +718,16 @@ def review_ai_suggestion(
             detail="Inactive agents cannot review suggestions"
     )
 
-    if payload.action =="approve":
+    if payload.action == "approve":
+
         suggestion.status = "approved"
+
         if payload.edited_reply is not None:
             suggestion.edited_reply = payload.edited_reply.strip()
-    
-        elif payload.action == "reject":
-          if payload.edited_reply is not None:
+
+    elif payload.action == "reject":
+
+        if payload.edited_reply is not None:
             raise HTTPException(
                 status_code=422,
                 detail="Rejected suggestions cannot contain edited replies"
@@ -745,7 +752,7 @@ def review_ai_suggestion(
             detail="Failed to review AI suggestion"
         )
 
-    return AIReplyReviewRequest(
+    return AIReplyReviewResponse(
         id=suggestion.id,
         ticket_id=suggestion.ticket_id,
         status=suggestion.status,
@@ -754,7 +761,6 @@ def review_ai_suggestion(
         reviewed_by_agent_id=suggestion.reviewed_by_agent_id,
         reviewed_at=suggestion.reviewed_at
     )
-
 @router.get(
     "/{ticket_id}/ai-automation/jobs",
     response_model=list[AIAutomationJobResponse]

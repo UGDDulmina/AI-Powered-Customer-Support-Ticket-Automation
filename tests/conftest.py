@@ -1,4 +1,6 @@
 import os
+from unittest.mock import patch
+import uuid
 import pytest
 
 from dotenv import load_dotenv
@@ -11,6 +13,8 @@ from app.main import app
 from app.db.dependencies import get_db
 
 from sqlalchemy.engine import make_url
+
+from app.schemas.support_agent import SupportAgentBase
 
 load_dotenv()
 
@@ -106,12 +110,55 @@ def created_ticket(client, created_customer):
         "priority": "medium"
     }
 
-    response = client.post(
-        "/api/v1/tickets",
-        json=ticket_data
-    )
+    with patch("app.api.tickets.BackgroundTasks.add_task") as mock_worker:
+        
+        response = client.post(
+            "/api/v1/tickets",
+            json=ticket_data
+        )
 
     assert response.status_code == 201
+    mock_worker.assert_called_once()
+
+    return response.json()
+
+import pytest
+from app.models.ai_reply_suggestion import AIReplySuggestion
+
+
+@pytest.fixture
+def created_ai_suggestion(db_session, created_ticket):
+
+    suggestion = AIReplySuggestion(
+        ticket_id=created_ticket["id"],
+        suggested_reply=(
+            "Thank you for contacting support. "
+            "Please try resetting your password."
+        ),
+        status="pending"
+    )
+
+    db_session.add(suggestion)
+    db_session.flush()
+
+    return suggestion
+
+@pytest.fixture
+def sample_agent():
+    return{
+    "name": "John Smith",
+    "email": f"agent-{uuid.uuid4().hex}@example.com"
+}
+
+@pytest.fixture
+def create_support_agent(client, sample_agent):
+
+    response = client.post(
+        "/api/v1/agents",
+        json=sample_agent
+    )
+
+    assert response.status_code == 201, response.text
 
     return response.json()
 

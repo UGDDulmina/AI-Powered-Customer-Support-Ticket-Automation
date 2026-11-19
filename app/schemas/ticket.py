@@ -139,7 +139,16 @@ class AIReplySuggestionListResponse(BaseModel):
 class AIReplyReviewRequest(BaseModel):
     agent_id:int = Field(gt=0)
     action: Literal["approve","reject"]
-    edited_reply: str | None
+    edited_reply: str | None = None
+
+class AIReplyReviewResponse(BaseModel):
+    id: int
+    ticket_id: int
+    status: str
+    suggested_reply: str
+    edited_reply: str | None = None
+    reviewed_by_agent_id: int
+    reviewed_at: datetime
     
 
 

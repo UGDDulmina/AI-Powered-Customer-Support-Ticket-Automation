@@ -40,7 +40,10 @@ def create_agent(
         SupportAgent.email == model_data.email
     )
 
-    email_verify = database_session.scalars(statement)
+    email_verify = database_session.scalar(statement)
+
+    print("REQUEST EMAIL:", model_data.email)
+    print("EXISTING AGENT:", email_verify)
 
     if email_verify is not None:
         raise HTTPException(
