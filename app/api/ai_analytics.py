@@ -120,30 +120,37 @@ def get_ai_reply_analytics(
             )
     ).label("rejected_suggestions"),
 
-    func.sum(
+    
+    func.coalesce(
+        func.sum(
             case(
-                (AIReplySuggestion.status == "send", 1),
+                (AIReplySuggestion.status == "sent", 1),
                 else_=0
             )
+        ),
+        0
     ).label("sent_suggestions"),
 
+
+   
     func.sum(
-                case(
-                      AIReplySuggestion.edited_reply.is_not(None)
-                      & (func.trim(AIReplySuggestion.edited_reply) != ""),
-                       1
+        case(
+            (
+                (AIReplySuggestion.edited_reply.is_not(None))
+                & (func.trim(AIReplySuggestion.edited_reply) != ""),
+                1
             ),
-        else_=0
-    ).label("edited_suggestions"),
-    
- ) 
+            else_=0
+        )
+    ).label("edited_suggestions")
+    )
+    result = database_session.execute(statement).one()
+  
     approved_suggestions = result.approved_suggestions
     sent_suggestions = result.sent_suggestions
     rejected_suggestions = result.rejected_suggestions
     total_suggestions = result.total_suggestions
 
-    
-    result = database_session.execute(statement).one()
 
     accepted_suggestions = (
         approved_suggestions + sent_suggestions
@@ -173,7 +180,7 @@ def get_ai_reply_analytics(
 
     return AIReplyAnalyticsResponse(
         total_suggestions=total_suggestions,
-        pending_suggestions=result.ending_suggestions,
+        pending_suggestions=result.pending_suggestions,
         approved_suggestions=approved_suggestions,
         rejected_suggestions=rejected_suggestions,
         sent_suggestions=sent_suggestions,

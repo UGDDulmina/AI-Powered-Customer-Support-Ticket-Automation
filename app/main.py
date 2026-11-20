@@ -11,6 +11,8 @@ from app.api.stats import router as status_router
 from app.api.ai_suggestions import router as ai_suggestions_router
 from app.api.ai_automation import router as ai_automation_router
 from app.api.support_agent import router as support_agent      
+from app.api.ai_analytics import router as ai_analytics_router
+
 
 app = FastAPI(
     title="AI Customer Support API",
@@ -53,9 +55,12 @@ app.include_router(
     prefix="/api/v1"
 )
 
+app.include_router(
+    ai_analytics_router, 
+    prefix="/api/v1"
+)
+
  
-
-
 @app.get("/")
 def root():
     return {
