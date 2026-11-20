@@ -1,4 +1,3 @@
-from tests.conftest import db_session
 from sqlalchemy import select, func
 from app.models.ticket_message import TicketMessage
 
@@ -60,7 +59,8 @@ def test_reject_ai_suggestion(
 def test_reject_ai_suggestion_with_edited_reply(
     client,
     created_ai_suggestion,
-    create_support_agent
+    create_support_agent,
+    db_session
 ):
 
         suggestion_id = created_ai_suggestion.id
@@ -175,9 +175,6 @@ def test_send_approved_ai_reply(
     assert message.ticket_id == suggestion.ticket_id
     assert message.sender_type == "AGENT"
     assert message.content == suggestion.suggested_reply
-
-from sqlalchemy import select, func
-from app.models.ticket_message import TicketMessage
 
 
 def test_cannot_send_ai_reply_twice(

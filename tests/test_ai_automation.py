@@ -257,7 +257,7 @@ def test_completed_ai_automation_job_cannot_process_again(
         process_ai_automation_job(job_id)
 
       
-        mock_generate.assert_called_once()
+        mock_generate.assert_not_called()
 
 
     db_session.expire_all()
