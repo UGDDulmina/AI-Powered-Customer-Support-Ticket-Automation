@@ -22,9 +22,12 @@ from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
 
+from app.core.auth_dependencies import require_admin
+
 router = APIRouter(
-    prefix= "/agents",
-    tags=["Agents"]
+    prefix="/agents",
+    tags=["Agents"],
+    dependencies=[Depends(require_admin)],
 )
 
 @router.post(

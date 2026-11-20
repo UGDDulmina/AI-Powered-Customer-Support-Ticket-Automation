@@ -39,11 +39,20 @@ class SupportAgent(Base):
         default=datetime.now(timezone.utc),
         nullable=False
     )
-    assigned_tickets: Mapped[Ticket] = relationship(
-      "OtherModel",
-      back_populates="matching_relationship_name"
-    )
+
     assigned_tickets = relationship(
         "Ticket",
         back_populates="assigned_agent"
+    )
+
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="agent",
+        server_default="agent"
     )

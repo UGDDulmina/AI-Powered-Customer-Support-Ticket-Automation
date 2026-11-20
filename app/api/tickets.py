@@ -70,7 +70,7 @@ from app.schemas.ticket_activity import (
 )
 
 from app.services.ticket_categorizer import categorize_ticket
-
+from app.core.auth_dependencies import get_current_agent
 
 ALLOWED_STATUS = {
     TicketStatus.OPEN: {
@@ -89,7 +89,8 @@ ALLOWED_STATUS = {
 
 router = APIRouter(
     prefix="/tickets",
-    tags=["Tickets"]
+    tags=["Tickets"],
+    dependencies=[Depends(get_current_agent)],
 )
 
 @router.post(

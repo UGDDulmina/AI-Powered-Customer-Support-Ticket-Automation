@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 
 class SupportAgentBase(BaseModel):
@@ -45,4 +46,6 @@ class AgentWorkloadResponse(BaseModel):
     is_active: bool
     active_tickets: int
 
-    
+
+
+
