@@ -38,4 +38,7 @@ class AIAutomationTrendResponse(BaseModel):
     completed_jobs: int
     failed_jobs: int
     success_rate: float
+
+
+    
     
