@@ -1,0 +1,598 @@
+﻿
+========================================
+FILE: app/models/support_agent.py
+========================================
+from __future__ import annotations
+
+from datetime import datetime, timezone
+
+from app.db.base import Base
+
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, String, DateTime
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.ticket import Ticket
+
+
+class SupportAgent(Base):
+    __tablename__ = "support_agents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    name: Mapped[str] = mapped_column(
+        String(150),
+        nullable=False
+    )
+
+    email: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+        index=True
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+    created_at: Mapped[DateTime] = mapped_column(
+        DateTime(timezone=True),
+        default=datetime.now(timezone.utc),
+        nullable=False
+    )
+
+    assigned_tickets = relationship(
+        "Ticket",
+        back_populates="assigned_agent"
+    )
+
+    password_hash: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True
+    )
+
+    role: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="agent",
+        server_default="agent"
+    )
+
+========================================
+FILE: app/schemas/agent_registration.py
+========================================
+from typing import Literal
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+
+
+class AgentRegistrationRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=150)
+    email: EmailStr
+    password: str = Field(min_length=12, max_length=128)
+    role: Literal["admin", "agent"] = "agent"
+
+
+class AgentRegistrationResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    email: EmailStr
+    role: str
+    is_active: bool
+
+========================================
+FILE: app/schemas/support_agent.py
+========================================
+from datetime import datetime
+from typing import Literal
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
+
+class SupportAgentBase(BaseModel):
+    name: str = Field(
+        min_length=2,
+        max_length=100
+    )
+
+    email: EmailStr
+
+class SupportAgentCreate(SupportAgentBase):
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+class SupportAgentUpdate(BaseModel):
+    name: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=100
+    )
+    email: EmailStr | None = Field(
+        default=None
+    )
+    is_active: bool | None = Field(
+        default=None
+    )
+    model_config = ConfigDict(
+        extra="forbid"
+    )
+
+class SupportAgentResponse(SupportAgentBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+class AgentWorkloadResponse(BaseModel):
+    agent_id: int
+    agent_name: str
+    is_active: bool
+    active_tickets: int
+
+
+
+
+
+========================================
+FILE: app/api/auth.py
+========================================
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.db.dependencies import get_db
+from app.schemas.auth import AgentLoginRequest, TokenResponse
+from app.services.auth_service import authenticate_agent
+from app.core.security import create_access_token
+from app.core.auth_dependencies import get_current_agent
+from app.models.support_agent import SupportAgent
+from app.schemas.auth import AuthenticatedAgentResponse
+
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"]
+)
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse
+)
+def login(
+    payload: AgentLoginRequest,
+    db: Session = Depends(get_db)
+):
+    agent = authenticate_agent(
+        db=db,
+        email=payload.email,
+        password=payload.password
+    )
+
+    if agent is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
+
+    access_token = create_access_token(
+        agent_id=agent.id
+    )
+
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer"
+    )
+
+@router.get("/me", response_model=AuthenticatedAgentResponse)
+def get_my_profile(
+    current_agent: SupportAgent = Depends(get_current_agent),
+):
+    return current_agent
+
+========================================
+FILE: app/api/agent_registration.py
+========================================
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.db.dependencies import get_db
+from app.models.support_agent import SupportAgent
+from app.schemas.agent_registration import (
+    AgentRegistrationRequest,
+    AgentRegistrationResponse,
+)
+from app.core.security import hash_password
+from app.core.auth_dependencies import require_admin
+
+router = APIRouter(
+    prefix="/agents",
+    tags=["Agent Registration"],
+)
+
+
+@router.post(
+    "/register",
+    response_model=AgentRegistrationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_agent(
+    payload: AgentRegistrationRequest,
+    db: Session = Depends(get_db),
+    admin: SupportAgent = Depends(require_admin),
+):
+    email = str(payload.email).strip().lower()
+
+    existing_agent = db.scalar(
+        select(SupportAgent).where(SupportAgent.email == email)
+    )
+
+    if existing_agent:
+        raise HTTPException(
+            status_code=409,
+            detail="Agent email already exists",
+        )
+
+    agent = SupportAgent(
+        name=payload.name.strip(),
+        email=email,
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        is_active=True,
+    )
+
+    db.add(agent)
+
+    try:
+        db.commit()
+        db.refresh(agent)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Agent email already exists",
+        )
+
+    return agent
+
+========================================
+FILE: app/api/support_agent.py
+========================================
+
+from fastapi import (
+    APIRouter, 
+    Depends,
+    HTTPException, 
+    status
+)
+
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import and_, func, select
+
+from app.models.support_agent import SupportAgent
+from app.models.ticket import Ticket
+from app.schemas.support_agent import (
+    AgentWorkloadResponse,
+    SupportAgentResponse,
+    SupportAgentCreate,
+    SupportAgentUpdate
+)
+
+from sqlalchemy.orm import Session
+
+from app.db.dependencies import get_db
+
+from app.core.auth_dependencies import require_admin
+
+router = APIRouter(
+    prefix="/agents",
+    tags=["Agents"],
+    dependencies=[Depends(require_admin)],
+)
+
+@router.post(
+    "",
+    response_model = SupportAgentResponse,
+    status_code=status.HTTP_201_CREATED 
+)
+def create_agent(
+    model_data: SupportAgentCreate,
+    database_session: Session = Depends(get_db)
+):
+    statement = select(SupportAgent).where(
+        SupportAgent.email == model_data.email
+    )
+
+    email_verify = database_session.scalar(statement)
+
+    print("REQUEST EMAIL:", model_data.email)
+    print("EXISTING AGENT:", email_verify)
+
+    if email_verify is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Email already exits"
+        )
+    agent = SupportAgent(
+       name = model_data.name,
+       email = model_data.email
+    )
+
+    database_session.add(agent)
+
+    try:
+        database_session.commit()
+        database_session.refresh(agent)
+
+    except IntegrityError:
+        database_session.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Agent conflicts with database constraint"
+        )
+
+    return agent
+    
+@router.get(
+    "",
+    response_model= list[SupportAgentResponse]
+)
+def get_agent(
+    is_active: bool | None=None,
+    database_session: Session = Depends(get_db)
+):
+    statement = select(SupportAgent)
+
+    if is_active is not None:
+        statement = statement.where(
+            SupportAgent.is_active == is_active
+        )
+
+    agents = database_session.scalars(statement).all()
+
+    return agents
+
+
+@router.get(
+    "/{agent_id}",
+    response_model= SupportAgentResponse
+)
+def get_selected_agent(
+    agent_id: int,
+    database_session: Session = Depends(get_db)
+):
+    statement = select(SupportAgent)
+
+    statement = statement.where(
+        SupportAgent.id == agent_id
+    )
+
+    agent = database_session.scalar(statement)
+
+    if agent is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Support agent not found"
+        )
+
+    return agent
+
+@router.put(
+    "/{agent_id}",
+    response_model= SupportAgentResponse
+)
+def update_agent(
+    agent_id: int,
+    update_data: SupportAgentUpdate,
+    database_session: Session = Depends(get_db)
+):
+    agent = database_session.get(SupportAgent, agent_id)
+
+    if agent is None:
+        raise HTTPException(
+            status_code=404,
+            detail="agent not found"
+        )
+
+    if update_data.email is not None:
+        statement = select(SupportAgent).where(
+           SupportAgent.email == update_data.email,
+           SupportAgent.id != agent_id
+        )
+
+        dup_agent = database_session.scalar(statement)
+
+        if dup_agent:
+            raise HTTPException(
+                status_code=409,
+                detail="Duplicate email found."
+            )
+
+    updated_agent = update_data.model_dump(
+        exclude_unset=True
+    )
+
+    for field_name,value in updated_agent.items():
+        if value is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{field_name} cannot be null"
+            )
+        setattr(agent, field_name, value)
+
+    try:
+        database_session.commit()
+        database_session.refresh(agent)
+
+    except IntegrityError:
+        database_session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Agent update conflict with database constraints"
+        )
+    return agent
+
+    
+    
+@router.patch(
+  "/{agent_id}/deactivate",
+   response_model= SupportAgentResponse
+)
+def deactivate(
+    agent_id:int,
+    database_session: Session = Depends(get_db)
+):
+   agent = database_session.get(SupportAgent, agent_id)
+
+   if agent is None:
+       raise HTTPException(
+           status_code=404,
+           detail="Not found"
+       )
+
+   if not agent.is_active:
+       return agent
+
+   agent.is_active = False
+
+   database_session.commit()
+   database_session.refresh(agent)
+
+   return agent
+
+@router.get(
+    "/workload",
+    response_model=list[AgentWorkloadResponse]
+)
+
+def get_agent_workload(
+    database_session: Session = Depends(get_db)
+):
+    statement = (
+        select(
+            SupportAgent,
+            func.count(Ticket.id).label("active_tickets")
+        ).outerjoin(
+            Ticket,
+            and_(
+                Ticket.assigned_agent_id == SupportAgent.id,
+                Ticket.status.in_(["open", "in_progress"])
+            )
+        ).group_by(SupportAgent.id).order_by(SupportAgent.id.asc())
+    )
+
+    results = database_session.execute(statement).all()
+
+    workloads = []
+
+    for row in results:
+        agent = row.SupportAgent
+
+        res = AgentWorkloadResponse(
+            agent_id=agent.id,
+            agent_name=agent.name,
+            is_active=agent.is_active,
+            active_tickets=row.active_tickets
+        )
+
+        workloads.append(res)
+
+    return workloads
+
+========================================
+FILE: app/core/auth_dependencies.py
+========================================
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+
+from app.db.dependencies import get_db
+from app.models.support_agent import SupportAgent
+from app.core.security import decode_access_token
+
+bearer_scheme = HTTPBearer()
+
+
+def get_current_agent(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> SupportAgent:
+
+    agent_id = decode_access_token(credentials.credentials)
+
+    if agent_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired access token",
+        )
+
+    agent = db.get(SupportAgent, agent_id)
+
+    if agent is None or not agent.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Agent not found or inactive",
+        )
+
+    return agent
+
+
+def require_admin(
+    current_agent: SupportAgent = Depends(get_current_agent),
+) -> SupportAgent:
+
+    if current_agent.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+
+    return current_agent
+
+========================================
+FILE: app/services/auth_service.py
+========================================
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models.support_agent import SupportAgent
+from app.core.security import verify_password
+
+
+def authenticate_agent(
+    db: Session,
+    email: str,
+    password: str
+) -> SupportAgent | None:
+
+    normalized_email = email.strip().lower()
+
+    agent = db.scalar(
+        select(SupportAgent).where(
+            SupportAgent.email == normalized_email
+        )
+    )
+
+    if agent is None:
+        return None
+
+    if not agent.is_active:
+        return None
+
+    if not agent.password_hash:
+        return None
+
+    if not verify_password(password, agent.password_hash):
+        return None
+
+    return agent

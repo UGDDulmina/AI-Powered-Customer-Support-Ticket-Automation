@@ -56,3 +56,6 @@ class SupportAgent(Base):
         default="agent",
         server_default="agent"
     )
+    @property
+    def has_password(self) -> bool:
+       return bool(self.password_hash)

@@ -33,11 +33,22 @@ class SupportAgentUpdate(BaseModel):
 
 class SupportAgentResponse(SupportAgentBase):
     id: int
+    role: Literal["admin", "agent"]
     is_active: bool
     created_at: datetime
-
+    has_password:bool
     model_config = ConfigDict(
         from_attributes=True
+    )
+
+class AgentPasswordResetRequest(BaseModel):
+    password: str = Field(
+        min_length=12,
+        max_length=128
+    )
+
+    model_config = ConfigDict(
+        extra="forbid"
     )
 
 class AgentWorkloadResponse(BaseModel):

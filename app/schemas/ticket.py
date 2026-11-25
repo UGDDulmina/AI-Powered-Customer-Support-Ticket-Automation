@@ -79,7 +79,7 @@ class TicketPriorityUpdate(BaseModel):
     )
 
 class TicketPaginatedResponse(BaseModel):
-    item: list[TicketResponse]
+    items: list[TicketResponse]
     total: int
     page: int
     limit: int
