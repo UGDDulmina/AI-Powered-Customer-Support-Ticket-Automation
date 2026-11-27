@@ -44,7 +44,7 @@ class TicketBase(BaseModel):
     )
 
 class TicketCreate(TicketBase):
-    customer_id: int = Field(gt=0),
+    customer_id: int = Field(gt=0)
     priority: TicketPriority | None = None
 
     model_config=ConfigDict(
@@ -149,8 +149,3 @@ class AIReplyReviewResponse(BaseModel):
     edited_reply: str | None = None
     reviewed_by_agent_id: int
     reviewed_at: datetime
-    
-
-
-
-

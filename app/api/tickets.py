@@ -70,7 +70,8 @@ from app.schemas.ticket_activity import (
 )
 
 from app.services.ticket_categorizer import categorize_ticket
-from app.core.auth_dependencies import get_current_agent
+from app.core.auth_dependencies import get_current_agent, require_admin
+from app.core.ticket_permissions import ensure_ticket_access, resolve_agent_scope
 
 ALLOWED_STATUS = {
     TicketStatus.OPEN: {
@@ -101,7 +102,8 @@ router = APIRouter(
 def create_ticket(
     ticket_data: TicketCreate,
     background_tasks: BackgroundTasks,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(require_admin)
 ):
     customer = database_session.get(
         Customer,
@@ -138,7 +140,7 @@ def create_ticket(
         customer_id = ticket_data.customer_id,
         description = ticket_data.description,
         priority = final_priority,
-        category = predicted_category,
+        category = ticket_data.category or predicted_category,
         status = TicketStatus.OPEN.value,
         subject = ticket_data.subject,
         assigned_agent_id=assigned_agent_id
@@ -199,7 +201,8 @@ def create_ticket(
 )
 def get_ticket(
     ticket_id: int = Path(gt=0),
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     ticket = database_session.get(Ticket, ticket_id)
 
@@ -208,6 +211,7 @@ def get_ticket(
             status_code=404,
             detail="Ticket not found"
         )
+    ensure_ticket_access(ticket, current_agent)
 
     return ticket
 
@@ -237,8 +241,10 @@ def get_tickets(
     priority: TicketPriority | None = Query(
         default=None
     ),
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
+    assigned_agent_id = resolve_agent_scope(current_agent, assigned_agent_id)
     offset = (page - 1) * limit
 
     statement = select(Ticket)
@@ -271,7 +277,7 @@ def get_tickets(
             Ticket.assigned_agent_id == assigned_agent_id
         )
 
-    count_statement = select(func.count()).select_from(Ticket)
+    count_statement = select(func.count()).select_from(statement.subquery())
 
     total = database_session.scalar(count_statement)
     total_pages = math.ceil(total/limit)
@@ -304,7 +310,8 @@ def get_tickets(
 def update_ticket(
     ticket_id: int ,
     ticket_data: TicketUpdate,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(require_admin)
 ):
     ticket = database_session.get(Ticket, ticket_id)
 
@@ -340,7 +347,8 @@ def update_ticket(
 def status_update(
     status_data: TicketStatusUpdate,
     database_session: Session = Depends(get_db),
-    ticket_id: int = Path(gt=0)
+    ticket_id: int = Path(gt=0),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     ticket = database_session.get(Ticket, ticket_id)
 
@@ -349,6 +357,7 @@ def status_update(
             status_code=404,
             detail="Ticket not found"
         )
+    ensure_ticket_access(ticket, current_agent)
 
     try:
        current_status = TicketStatus(ticket.status)
@@ -397,7 +406,8 @@ def status_update(
 def priority_update(
     priority_data: TicketPriorityUpdate,
     database_session: Session = Depends(get_db),
-    ticket_id: int = Path(gt=0)
+    ticket_id: int = Path(gt=0),
+    current_agent: SupportAgent = Depends(require_admin)
 ):
   ticket = database_session.get(Ticket, ticket_id)
 
@@ -440,7 +450,8 @@ def priority_update(
 def assign_agent(
     ticket_id: int,
     assignment_data: TicketAssignRequest, 
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(require_admin)
 ):
     ticket = database_session.get(Ticket,ticket_id)
 
@@ -458,16 +469,18 @@ def assign_agent(
             status_code=404,
             detail="Not found"
         )
-    if not agent.is_active:
+    if not agent.is_active or agent.role != "agent" or not agent.has_password:
         raise HTTPException(
             status_code=409,
             detail="Not found"
         )
 
-    if old_agent_id == new_agent_id:
-            return ticket
+
     
     old_agent_id = ticket.assigned_agent_id
+    new_agent_id = agent.id
+    if old_agent_id == new_agent_id:
+        return ticket
     
     ticket.assigned_agent = agent
     ticket.assigned_agent_id = agent.id
@@ -505,7 +518,8 @@ def assign_agent(
 )
 def get_activities(
     ticket_id : int = Path(gt=0),
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     statement = select(TicketActivity)
 
@@ -516,6 +530,7 @@ def get_activities(
             status_code=404,
             detail="Not found"
         )
+    ensure_ticket_access(ticket, current_agent)
 
     statement = statement.where(
         TicketActivity.ticket_id == ticket_id
@@ -537,7 +552,8 @@ def get_activities(
     response_model = TicketCategorizeResponse
 )
 def find_category(
-    message_data: TicketCategorizeRequest
+    message_data: TicketCategorizeRequest,
+    current_agent: SupportAgent = Depends(require_admin)
 ):
     category = categorize_ticket(
         message_data.subject,
@@ -553,7 +569,8 @@ def find_category(
     response_model = TicketPriorityResponse
 )
 def preview_ticket_priority(
-    message_data: TicketPriorityRequest
+    message_data: TicketPriorityRequest,
+    current_agent: SupportAgent = Depends(require_admin)
 ):
 
     result = explain_ticket_priority(
@@ -562,7 +579,7 @@ def preview_ticket_priority(
     )
 
     return TicketPriorityResponse(
-        predicted_priority=result["predicted_priority"],
+        priority=result["priority"],
         matched_keywords=result["matched_keywords"],
         reason=result["reason"]
     )
@@ -573,7 +590,8 @@ def preview_ticket_priority(
 )
 def suggest_ticket_reply(
     ticket_id: int,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
 
     ticket = database_session.get(Ticket, ticket_id)
@@ -583,6 +601,7 @@ def suggest_ticket_reply(
             status_code=404,
             detail="Ticket not found"
         )
+    ensure_ticket_access(ticket, current_agent)
     statement = (
             select(TicketMessage)
             .where(
@@ -655,7 +674,8 @@ def suggest_ticket_reply(
 )
 def get_pending_ai_suggestions(
     ticket_id: int,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
 
     ticket = database_session.get(Ticket, ticket_id)
@@ -665,6 +685,7 @@ def get_pending_ai_suggestions(
             status_code=404,
             detail="Ticket Not found"
         )
+    ensure_ticket_access(ticket, current_agent)
 
     statement = (
         select(AIReplySuggestion)
@@ -689,7 +710,8 @@ def get_pending_ai_suggestions(
 def review_ai_suggestion(
     suggestion_id: int,
     payload: AIReplyReviewRequest,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):  
     suggestion = database_session.get(AIReplySuggestion, suggestion_id)
 
@@ -699,25 +721,15 @@ def review_ai_suggestion(
             detail="Not found"
     )
 
-    if not suggestion.status == "pending":
-        raise HTTPException(
-            status_code=409,
-            detail="Suggestion has already been reviewed"
-        )
-    
-    agent = database_session.get(SupportAgent, payload.agent_id)
-
-    if agent is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Agent not found"
-    )
-
-    if not agent.is_active:
-        raise HTTPException(
-            status_code=403,
-            detail="Inactive agents cannot review suggestions"
-    )
+    ticket = database_session.get(Ticket, suggestion.ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ensure_ticket_access(ticket, current_agent)
+    if payload.agent_id != current_agent.id:
+        raise HTTPException(status_code=403, detail="Agent identity mismatch")
+    if suggestion.status != "pending":
+        raise HTTPException(status_code=409, detail="Suggestion has already been reviewed")
+    agent = current_agent
 
     if payload.action == "approve":
 
@@ -768,7 +780,8 @@ def review_ai_suggestion(
 )
 def get_ticket_automation_jobs(
     ticket_id: int,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     ticket = database_session.get(Ticket, ticket_id)
 
@@ -777,6 +790,7 @@ def get_ticket_automation_jobs(
             status_code=404,
             detail="Not found"
         )
+    ensure_ticket_access(ticket, current_agent)
     
     statement = (
         select(AIAutomationJob)
@@ -790,12 +804,3 @@ def get_ticket_automation_jobs(
     jobs = database_session.scalars(statement).all()
 
     return jobs
-
-
-
-    
-
-
-
-    
-    

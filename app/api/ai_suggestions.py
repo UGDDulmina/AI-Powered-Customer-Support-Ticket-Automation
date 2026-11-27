@@ -1,4 +1,6 @@
-
+from app.core.auth_dependencies import get_current_agent
+from app.core.ticket_permissions import ensure_ticket_access
+from app.models.ticket import Ticket
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
@@ -28,7 +30,8 @@ router = APIRouter(
 def send_approved_ai_reply(
     suggestion_id: int,
     payload: AIReplySendRequest,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     try:
         
@@ -46,29 +49,15 @@ def send_approved_ai_reply(
                 detail="AI suggestion not found"
             )
 
+        ticket = database_session.get(Ticket, suggestion.ticket_id)
+        if ticket is None:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+        ensure_ticket_access(ticket, current_agent)
+        if payload.agent_id != current_agent.id:
+            raise HTTPException(status_code=403, detail="Agent identity mismatch")
         if suggestion.status != "approved":
-            raise HTTPException(
-                status_code=409,
-                detail="Only approved suggestions can be sent"
-            )
-
-        
-        agent = database_session.get(
-            SupportAgent,
-            payload.agent_id
-        )
-
-        if agent is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Support agent not found"
-            )
-
-        if not agent.is_active:
-            raise HTTPException(
-                status_code=403,
-                detail="Inactive agents cannot send suggestions"
-            )
+            raise HTTPException(status_code=409, detail="Only approved suggestions can be sent")
+        agent = current_agent
 
         if suggestion.reviewed_by_agent_id != agent.id:
             raise HTTPException(
@@ -92,7 +81,7 @@ def send_approved_ai_reply(
        
         message = TicketMessage(
             ticket_id=suggestion.ticket_id,
-            sender_type="AGENT",
+            sender_type="agent",
             content=message_content.strip()
         )
 

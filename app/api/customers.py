@@ -1,3 +1,4 @@
+from app.core.auth_dependencies import require_admin
 from typing import Annotated
 
 from fastapi import (
@@ -21,6 +22,7 @@ from app.schemas.customer import (
 
 
 router = APIRouter(
+    dependencies=[Depends(require_admin)],
     prefix="/customers",
     tags=["Customers"],
 )
@@ -189,5 +191,3 @@ def delete_customer(
             status_code=status.HTTP_409_CONFLICT,
             detail="Customer has related records",
         )
-
-    

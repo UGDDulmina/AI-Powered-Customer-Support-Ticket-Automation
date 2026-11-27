@@ -75,3 +75,4 @@ def explain_ticket_priority(
                  "reason": reason
               }
 
+   return {"priority": "medium", "matched_keywords": [], "reason": "No matching priority keywords detected."}

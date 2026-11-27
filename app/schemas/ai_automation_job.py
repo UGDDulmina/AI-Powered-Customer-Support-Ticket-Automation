@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AIAutomationJobResponse(BaseModel):
@@ -8,7 +8,7 @@ class AIAutomationJobResponse(BaseModel):
     status:str
     attempt_count: int
     error_message:str | None
-    crated_at: datetime
+    crated_at: datetime = Field(validation_alias="created_at")
     started_at: datetime | None
     completed_at: datetime | None
     

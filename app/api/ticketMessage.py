@@ -1,3 +1,6 @@
+from app.core.auth_dependencies import get_current_agent
+from app.core.ticket_permissions import ensure_ticket_access
+from app.models.support_agent import SupportAgent
 from fastapi import (
     APIRouter,
     Path,
@@ -36,7 +39,8 @@ router = APIRouter(
 def create_message(
     message_data:TicketMessageCreate,
     ticket_id: int = Path(gt=0),
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     ticket = database_session.get(
         Ticket,
@@ -48,7 +52,10 @@ def create_message(
             status_code=404,
             detail="Ticket not found"
         )
+    ensure_ticket_access(ticket, current_agent)
 
+    if message_data.sender_type != MessageSenderType.AGENT:
+        raise HTTPException(status_code=403, detail="Staff can only send agent messages")
     message = TicketMessage(
         ticket_id=ticket_id,
         sender_type=message_data.sender_type.value,
@@ -80,7 +87,8 @@ def get_messages(
     sender_type: MessageSenderType | None = Query(
         default=None
     ),
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
     ticket = database_session.get(Ticket, ticket_id)
 
@@ -89,6 +97,7 @@ def get_messages(
             status_code=404,
             detail="Ticket Not Found"
         )
+    ensure_ticket_access(ticket, current_agent)
     
     statement = select(TicketMessage).where(
         TicketMessage.ticket_id == ticket_id

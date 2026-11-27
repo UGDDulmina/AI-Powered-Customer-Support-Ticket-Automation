@@ -1,3 +1,7 @@
+from app.core.auth_dependencies import get_current_agent, require_admin
+from app.core.ticket_permissions import ensure_ticket_access
+from app.models.ticket import Ticket
+from app.models.support_agent import SupportAgent
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 
@@ -23,7 +27,8 @@ router = APIRouter(
 )
 def get_automation_job(
     job_id: int,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(get_current_agent)
 ):
 
     job = database_session.get(
@@ -37,6 +42,10 @@ def get_automation_job(
             detail="Automation job not found"
         )
 
+    ticket = database_session.get(Ticket, job.ticket_id)
+    if ticket is None:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ensure_ticket_access(ticket, current_agent)
     return job
 
 MAX_ATTEMPTS = 3
@@ -48,7 +57,8 @@ MAX_ATTEMPTS = 3
 def retry_automation_job(
     job_id: int,
     background_tasks: BackgroundTasks,
-    database_session: Session = Depends(get_db)
+    database_session: Session = Depends(get_db),
+    current_agent: SupportAgent = Depends(require_admin)
 ):
     job = database_session.get(AIAutomationJob, job_id)
 
@@ -107,5 +117,3 @@ def retry_automation_job(
     )
 
     return job
-
-    

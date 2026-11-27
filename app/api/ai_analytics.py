@@ -1,3 +1,4 @@
+from app.core.auth_dependencies import require_admin
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, func, case, and_
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from app.models.support_agent import SupportAgent
 from app.models.ai_reply_suggestion import AIReplySuggestion
 
 router = APIRouter(
+    dependencies=[Depends(require_admin)],
     prefix="/ai-analytics",
     tags=["AI Analytics"]
 )
@@ -378,11 +380,3 @@ def get_ai_automation_trends(
         daily_trends.append(res)
 
     return daily_trends
-
-        
-
-
-  
-
-
-

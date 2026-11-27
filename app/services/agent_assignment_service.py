@@ -31,7 +31,7 @@ def find_least_busy_agent(
                                 Ticket.status.in_(["open", "in_progress"])
                             )
                         )
-                        .where(SupportAgent.is_active.is_(True))
+                        .where(SupportAgent.is_active.is_(True), SupportAgent.role == "agent", SupportAgent.password_hash.is_not(None), SupportAgent.password_hash != "")
                         .group_by(SupportAgent.id)
                         .order_by(
                             func.count(Ticket.id).asc(),

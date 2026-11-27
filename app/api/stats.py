@@ -1,4 +1,4 @@
-
+from app.core.auth_dependencies import require_admin
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 
@@ -14,6 +14,7 @@ from app.schemas.stats import (
 from sqlalchemy.orm import Session
 
 router = APIRouter(
+    dependencies=[Depends(require_admin)],
     prefix="/stats",
     tags=["Statistics"]
 )
