@@ -691,7 +691,9 @@ def get_pending_ai_suggestions(
         select(AIReplySuggestion)
         .where(
           AIReplySuggestion.ticket_id == ticket_id,
-          AIReplySuggestion.status == "pending"
+          AIReplySuggestion.status.in_(
+                ["pending", "approved"]
+        )
         ).order_by(
             AIReplySuggestion.created_at.desc(),
              AIReplySuggestion.id.desc()
